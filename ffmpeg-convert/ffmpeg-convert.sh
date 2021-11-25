@@ -7,8 +7,6 @@
 # + unless you're paranoid.
 # set -e
 
-# NOTE: functionalize "main" code; dry it up.
-
 # variables
 
 # misc
