@@ -1,0 +1,30 @@
+cal() {
+	local CURR_DAY_OF_MONTH CURR_MONTH_YEAR GRAD_MONTH_YEAR COLOR DECORATED_TEXT CAL_OPTS WHITESPACE EOL_STRIP
+	local IFS='%'
+
+	CURR_DAY_OF_MONTH="$(date +%e)"
+	CURR_MONTH_YEAR="$(date +%B\ %Y)"
+	GRAD_MONTH_YEAR="$(for COLOR in {17..21} 0 {21..17}; do [ "$COLOR" -eq 0 ] && DECORATED_TEXT="\e[7;49;33m ${CURR_MONTH_YEAR} \e[0m" || DECORATED_TEXT=" "; printf "\e[48;5;${COLOR}m${DECORATED_TEXT}\e[0m"; done)"
+
+	case "$(uname)" in
+	    Darwin)
+		CAL_OPTS="-h"
+		WHITESPACE=" "
+		EOL_STRIP="s/(${WHITESPACE}{2})$//g;"
+		;;
+	    Linux)
+		CAL_OPTS=""
+		WHITESPACE="\s"
+		EOL_STRIP=""
+		;;
+	esac
+
+	[ -z "$1" ] \
+		&& printf \
+		"$(/usr/bin/cal ${CAL_OPTS} \
+		| sed -r -e ${EOL_STRIP}'s/(^.* '${CURR_MONTH_YEAR}' .*$)/'${GRAD_MONTH_YEAR}'/g;s/^('${WHITESPACE}'*|'${WHITESPACE}'*[0-9].*)(('${CURR_DAY_OF_MONTH}')(('${WHITESPACE}'){1,2}[0-9]*.*$|$))/\\e[7;49;37m\1\\e[7;49;91m\3\\e[0m\\e[7;49;37m\4\\e[0m/g;')\n" \
+		|| /usr/bin/cal $*
+
+	unset IFS
+}
+
