@@ -1,0 +1,25 @@
+glq() {
+    local CLIST=""
+    local CCOUNT=0
+    [ -z "$1" ] \
+	&& printf "Usage: $FUNCNAME \"QUERY\" [n]\n\n\t\"QUERY\" == double-quote encapsulated search query used to find matches in the commit message log.\n\t\textended regex supported.\n\n\t[n]     == number of matches to return in a decending chronological order.\n\t\tdefault: 1.\n" \
+	&& return 1 \
+	|| CLIST=$(git log --pretty=tformat:%h --grep $1 --extended-regexp -n ${2:-1})
+
+    for COMMIT in $CLIST
+    do
+	let CCOUNT+=1
+    done
+
+    printf "\e[92mI found\e[0m \e[1m${CCOUNT}\e[0m \e[92mcommit(s).\e[0m\n"
+
+    if [ $CCOUNT -gt 0 ]
+    then
+	printf "=%.0s" {1..20}; printf "\n"
+	for COMMIT in $CLIST
+	do 
+	    git --no-pager log ${COMMIT} -n 1
+	    printf "\n"
+	done
+    fi
+}
