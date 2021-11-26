@@ -2,6 +2,7 @@
 #
 # a simple utility to convert *.(MP|mp)4 files into an MP3 with a normalized filename.
 # requires ffmpeg in your path
+# applematt84@gmail.com (2021)
 #
 # we have error handling built-in, so this isn't necessarily needed
 # + unless you're paranoid.
