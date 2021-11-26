@@ -1,3 +1,9 @@
+#!/bin/bash
+#
+# a .bashrc function that implements the glq (git log query) command
+# applematt84@gmail.com (2021)
+#
+
 glq() {
     local CLIST=""
     local CCOUNT=0
