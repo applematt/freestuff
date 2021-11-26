@@ -1,3 +1,9 @@
+#!/bin/bash
+#
+# a .bashrc function that implements a pretty, pretty calendar.
+# applematt84@gmail.com (2021)
+#
+
 cal() {
 	local CURR_DAY_OF_MONTH CURR_MONTH_YEAR GRAD_MONTH_YEAR COLOR DECORATED_TEXT CAL_OPTS WHITESPACE EOL_STRIP
 	local IFS='%'
