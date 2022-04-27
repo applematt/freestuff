@@ -18,6 +18,7 @@ WORKDIR="$(pwd)"
 FFMPEG="$(which ffmpeg)"
 DEBUG=0
 MP3COUNT=0
+COUNTER=0
 
 # commonly used exit codes
 E_SUCCESS=0
@@ -158,9 +159,10 @@ done
 
 for FILE in "${FILES[@]}"
 do
+    let COUNTER+=1
     FILEBASE="${FILE##/*/}"
     printer text "\n"
-    printer info "Now processing: ${C_BOLD}${FILEBASE}${C_RESET}"
+    printer info "Now processing ${C_BGGREEN}[ ${COUNTER}/${MP3COUNT} ]${C_RESET}: ${C_BOLD}${FILEBASE}${C_RESET}"
     # i'm silly and don't know any other way
     # + to do this (natively) in bash.
     FILEOUT="${FILEBASE//\_/-}"
@@ -173,16 +175,29 @@ do
 	FILEOUT="${FILEOUT/\.$EXT/.mp3}"
     done
 
-    [ -e $FILEOUT ] \
+    # assume we already processed this file if the mp3 exists and the
+    # + .part file is missing.
+    [ -f $FILEOUT ] && [ ! -f $FILEOUT.part ] \
 	&& printer warn "File exists: ${C_YELLOW}${FILEOUT}${C_RESET}" \
 	&& printer warn "This file already exists. Assuming re-run and moving on ..." \
 	&& continue
+
+    # if a part file exists, delete the (probably) corrupt mp3 and re-try.
+    [ -f $WORKDIR/$FILEOUT.part ] \
+	&& printer info "$WORKDIR/$FILEOUT.part found! Attempting to re-process this file ..." \
+	&& rm -f $FILEOUT
+
+    # create a part file so we know if our rendering is interrupted.
+    [ ! -f $WORKDIR/$FILEOUT.part ] \
+	&& touch $WORKDIR/$FILEOUT.part
 
     # -write_xing 0 is maybe mac-specific?
     $FFMPEG -loglevel error -report -n -ignore_unknown -i "$FILE" -f mp3 -write_xing 0 "$WORKDIR/$FILEOUT" & spinner
     if [[ $? -eq 0 ]]
     then
-	printer text "${C_BGGREEN}[ding]${C_RESET} Fries are done: ${C_GREEN}${FILEOUT}${C_RESET}\n"
+	printer text "${C_BGGREEN}[ding]${C_RESET} 🍟 Fries are done: ${C_GREEN}${FILEOUT}${C_RESET}\n"
+	# delete the part file if all went well
+	rm -f $WORKDIR/$FILEOUT.part
     else
 	printer fail "ERROR PROCESSING: ${FILE}"
     fi
