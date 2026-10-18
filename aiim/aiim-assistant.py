@@ -10,11 +10,21 @@ import json
 import asyncio
 import shutil
 import requests
+from playsound import playsound
 
 # --- CORE PATH CONFIGURATION ---
 BASE_STORAGE_DIR = os.path.expanduser("~/.aiim")
 DB_DIR = os.path.join(BASE_STORAGE_DIR, "knowledge_base")
 HISTORY_FILE = os.path.join(BASE_STORAGE_DIR, ".chat_history.json")
+SFX_DIR = os.path.join(BASE_STORAGE_DIR, "sfx")
+SFX_OPEN = os.path.join(SFX_DIR, "mixkit-creaky-door-open-195.wav")
+SFX_EXIT = os.path.join(SFX_DIR, "mixkit-creaky-closing-wood-door-189.wav")
+SFX_SEND = os.path.join(SFX_DIR, "mixkit-software-interface-start-2574.wav")
+SFX_RECV = os.path.join(SFX_DIR, "mixkit-software-interface-back-2575.wav")
+SFX_ALT1 = os.path.join(SFX_DIR, "mixkit-retro-game-notification-212.wav")
+SFX_ALT2 = os.path.join(SFX_DIR, "mixkit-computer-digital-lock-2859.wav")
+SFX_ALT3 = os.path.join(SFX_DIR, "mixkit-alert-bells-echo-765.wav")
+SFX_ERR1 = os.path.join(SFX_DIR, "mixkit-police-short-whistle-615.wav")
 EMBEDDING_MODEL = "nomic-embed-text"
 LLM_MODEL = "llama3.1"
 
@@ -23,155 +33,183 @@ os.makedirs(BASE_STORAGE_DIR, exist_ok=True)
 # --- DATA PROCESSING LOGIC ---
 
 def process_and_add_docs(documents, progress_callback):
-	"""Slices documents and appends vectors with live status updates."""
-	if not documents:
-		return "⚠️ No valid textual data found to process."
+    """Slices documents and appends vectors with live status updates."""
+    if not documents:
+        try:
+            playsound(SFX_ALT3, block=False)
+        except Exception:
+            pass
+        return "⚠️  No valid textual data found to process."
 
-	from langchain_text_splitters import RecursiveCharacterTextSplitter
-	from langchain_ollama import OllamaEmbeddings
-	from langchain_community.vectorstores import Chroma
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_ollama import OllamaEmbeddings
+    from langchain_community.vectorstores import Chroma
 
-	progress_callback("Analyzing & splitting document layout...", 25)
-	text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=300)
-	final_chunks = text_splitter.split_documents(documents)
-	total_chunks = len(final_chunks)
+    progress_callback("Analyzing & splitting document layout...", 25)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=300)
+    final_chunks = text_splitter.split_documents(documents)
+    total_chunks = len(final_chunks)
 
-	progress_callback(f"Vectorizing {total_chunks} blocks locally...", 60)
-	embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
+    progress_callback(f"Vectorizing {total_chunks} blocks locally...", 60)
+    embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
 
-	# Commit files to disk database
-	Chroma.from_documents(documents=final_chunks, embedding=embeddings, persist_directory=DB_DIR)
+    # Commit files to disk database
+    Chroma.from_documents(documents=final_chunks, embedding=embeddings, persist_directory=DB_DIR)
 
-	progress_callback("Commit complete!", 100)
-	return f"✅ Database successfully updated with {total_chunks} data blocks."
+    progress_callback("Commit complete!", 100)
+    try:
+        playsound(SFX_ALT1, block=False)
+    except Exception:
+        pass
+    return f"✅  Database successfully updated with {total_chunks} data blocks."
 
 
 # --- REUSABLE CORE EXTRACTION HELPERS ---
 
 def extract_site_content(url):
-	"""Core logic to fetch and strip text from a website."""
-	from bs4 import BeautifulSoup
-	from langchain_core.documents import Document
+    """Core logic to fetch and strip text from a website."""
+    from bs4 import BeautifulSoup
+    from langchain_core.documents import Document
 
-	headers = {'User-Agent': 'Mozilla/5.0'}
-	res = requests.get(url, headers=headers, timeout=10)
-	soup = BeautifulSoup(res.text, 'html.parser')
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    res = requests.get(url, headers=headers, timeout=10)
+    soup = BeautifulSoup(res.text, 'html.parser')
 
-	for el in soup(["script", "style", "nav", "footer", "header"]):
-		el.extract()
+    for el in soup(["script", "style", "nav", "footer", "header"]):
+        el.extract()
 
-	text = soup.get_text(separator=" ")
-	return [Document(page_content=text, metadata={"source": url, "category": "web"})]
+    text = soup.get_text(separator=" ")
+    return [Document(page_content=text, metadata={"source": url, "category": "web"})]
 
 
 def extract_file_content(file_path):
-	"""Core logic to parse text from an individual local file."""
-	from langchain_community.document_loaders import PyPDFLoader, TextLoader
+    """Core logic to parse text from an individual local file."""
+    from langchain_community.document_loaders import PyPDFLoader, TextLoader
 
-	expanded = os.path.expanduser(file_path)
-	if not os.path.isfile(expanded):
-		raise FileNotFoundError(f"File not found: {expanded}")
+    expanded = os.path.expanduser(file_path)
+    if not os.path.isfile(expanded):
+        raise FileNotFoundError(f"File not found: {expanded}")
 
-	if expanded.endswith('.pdf'):
-		return PyPDFLoader(expanded).load()
-	elif expanded.endswith('.txt'):
-		return TextLoader(expanded).load()
-	else:
-		raise ValueError("Unsupported file format. Please choose a .pdf or .txt file.")
+    if expanded.endswith('.pdf'):
+        return PyPDFLoader(expanded).load()
+    elif expanded.endswith('.txt'):
+        return TextLoader(expanded).load()
+    else:
+        raise ValueError("Unsupported file format. Please choose a .pdf or .txt file.")
 
 
 # --- MAIN INGESTION ENTRYPOINTS ---
 
 def run_site_scrape(url, progress_callback):
-	"""Scrapes clean text contents directly from a live public website."""
-	progress_callback("Establishing secure web connection...", 15)
-	try:
-		docs = extract_site_content(url)
-		return process_and_add_docs(docs, progress_callback)
-	except Exception as e:
-		return f"❌ Web extraction failed: {str(e)[:40]}"
+    """Scrapes clean text contents directly from a live public website."""
+    progress_callback("Establishing secure web connection...", 15)
+    try:
+        docs = extract_site_content(url)
+        return process_and_add_docs(docs, progress_callback)
+    except Exception as e:
+        try:
+            playsound(SFX_ERR1, block=False)
+        except Exception:
+            pass
+        return f"❌ Web extraction failed: {str(e)[:40]}"
 
 
 def run_single_file_ingest(file_path, progress_callback):
-	"""Parses an individual standalone data file from any disk path."""
-	progress_callback("Extracting isolated file streams...", 30)
-	try:
-		docs = extract_file_content(file_path)
-		return process_and_add_docs(docs, progress_callback)
-	except Exception as e:
-		return f"❌ Error: {str(e)[:50]}"
+    """Parses an individual standalone data file from any disk path."""
+    progress_callback("Extracting isolated file streams...", 30)
+    try:
+        docs = extract_file_content(file_path)
+        return process_and_add_docs(docs, progress_callback)
+    except Exception as e:
+        try:
+            playsound(SFX_ERR1, block=False)
+        except Exception:
+            pass
+        return f"❌ Error: {str(e)[:50]}"
 
 
 def run_manifest_ingest(manifest_path, progress_callback):
-	"""Reads a manifest file and processes each line using refactored extraction streams."""
-	expanded_manifest = os.path.expanduser(manifest_path)
-	if not os.path.isfile(expanded_manifest):
-		return "❌ Error: The manifest file path provided does not exist."
+    """Reads a manifest file and processes each line using refactored extraction streams."""
+    expanded_manifest = os.path.expanduser(manifest_path)
+    if not os.path.isfile(expanded_manifest):
+        try:
+            playsound(SFX_ERR1, block=False)
+        except Exception:
+            pass
+        return "❌ Error: The manifest file path provided does not exist."
 
-	progress_callback("Reading manifest contents...", 10)
-	try:
-		with open(expanded_manifest, 'r', encoding='utf-8') as f:
-			lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
-	except Exception as e:
-		return f"❌ Error reading manifest file: {str(e)[:40]}"
+    progress_callback("Reading manifest contents...", 10)
+    try:
+        with open(expanded_manifest, 'r', encoding='utf-8') as f:
+            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+    except Exception as e:
+        try:
+            playsound(SFX_ERR1, block=False)
+        except Exception:
+            pass
+        return f"❌ Error reading manifest file: {str(e)[:40]}"
 
-	if not lines:
-		return "⚠️ The manifest file is empty or contains no valid targets."
+    if not lines:
+        try:
+            playsound(SFX_ALT3, block=False)
+        except Exception:
+            pass
+        return "⚠️ The manifest file is empty or contains no valid targets."
 
-	all_docs = []
-	total_items = len(lines)
+    all_docs = []
+    total_items = len(lines)
 
-	for idx, item in enumerate(lines):
-		progress_callback(f"Processing ({idx+1}/{total_items}): {item[:20]}...", int(10 + (idx / total_items) * 50))
+    for idx, item in enumerate(lines):
+        progress_callback(f"Processing ({idx+1}/{total_items}): {item[:20]}...", int(10 + (idx / total_items) * 50))
 
-		try:
-			# Reuses exact web scraping helper logic
-			if item.startswith(('http://', 'https://')):
-				all_docs.extend(extract_site_content(item))
-			# Reuses exact file parsing helper logic
-			else:
-				all_docs.extend(extract_file_content(item))
-		except Exception as e:
-			# Log error quietly to terminal standard error and keep going through the manifest
-			print(f"Skipping '{item[:30]}' due to extraction failure: {e}", file=sys.stderr)
+        try:
+            # Reuses exact web scraping helper logic
+            if item.startswith(('http://', 'https://')):
+                all_docs.extend(extract_site_content(item))
+            # Reuses exact file parsing helper logic
+            else:
+                all_docs.extend(extract_file_content(item))
+        except Exception as e:
+            # Log error quietly to terminal standard error and keep going through the manifest
+            print(f"Skipping '{item[:30]}' due to extraction failure: {e}", file=sys.stderr)
 
-	# Single batch compile step for performance stability
-	return process_and_add_docs(all_docs, progress_callback)
+    # Single batch compile step for performance stability
+    return process_and_add_docs(all_docs, progress_callback)
 
 
 def query_local_ai(user_raw, chat_history):
-	"""Performs an offline RAG factual text query matching current context loops."""
-	import ollama
-	context_str = ""
+    """Performs an offline RAG factual text query matching current context loops."""
+    import ollama
+    context_str = ""
 
-	if os.path.exists(DB_DIR):
-		try:
-			from langchain_community.vectorstores import Chroma
-			from langchain_ollama import OllamaEmbeddings
-			vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
-			relevant = vs.as_retriever(search_kwargs={"k": 3}).invoke(user_raw)
-			context_str = "\n".join([d.page_content for d in relevant])
-		except:
-			pass
+    if os.path.exists(DB_DIR):
+        try:
+            from langchain_community.vectorstores import Chroma
+            from langchain_ollama import OllamaEmbeddings
+            vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
+            relevant = vs.as_retriever(search_kwargs={"k": 3}).invoke(user_raw)
+            context_str = "\n".join([d.page_content for d in relevant])
+        except:
+            pass
 
-	system_instructions = (
-		"You are an offline custom AI assistant running inside a blue AIM messenger app window.\n"
+    system_instructions = (
+        "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n"
         "Reference documents used to build response.\n"
-		f"Answer based on these document facts if relevant:\n{context_str}"
-	)
-	payload = [{"role": "system", "content": system_instructions}]
-	payload.extend(chat_history[-10:])
-	payload.append({"role": "user", "content": user_raw})
+        f"Answer based on these document facts if relevant:\n{context_str}"
+    )
+    payload = [{"role": "system", "content": system_instructions}]
+    payload.extend(chat_history[-10:])
+    payload.append({"role": "user", "content": user_raw})
 
-	full_reply = ""
-	try:
-		stream = ollama.chat(model=LLM_MODEL, messages=payload, stream=True)
-		for chunk in stream:
-			full_reply += chunk['message']['content']
-	except Exception as e:
-		full_reply = f"[Ollama Connection Error: {e}]"
+    full_reply = ""
+    try:
+        stream = ollama.chat(model=LLM_MODEL, messages=payload, stream=True)
+        for chunk in stream:
+            full_reply += chunk['message']['content']
+    except Exception as e:
+        full_reply = f"[Ollama Connection Error: {e}]"
 
-	return full_reply
+    return full_reply
 
 from rich.text import Text
 from rich.markdown import Markdown
@@ -367,7 +405,7 @@ class AIMAssistantApp(App):
                 id="top_bar"
             ),
             RichLog(id="chat_log", max_lines=1000, wrap=True),
-            Label("System Status: Online & Idle", id="status_row"),
+            Label(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"), id="status_row"),
             Input(placeholder="💬 Type your message here and hit Enter...", id="input_box"),
             id="main_container"
         )
@@ -377,6 +415,11 @@ class AIMAssistantApp(App):
         self.chat_log = self.query_one("#chat_log")
         self.status = self.query_one("#status_row")
         self.chat_history = []
+
+        try:
+            playsound(SFX_OPEN, block=False)
+        except Exception as e:
+            self.chat_log.write(f"⚠️  Audio Debug Error: {e}")
 
         if os.path.exists(HISTORY_FILE):
             try:
@@ -389,11 +432,20 @@ class AIMAssistantApp(App):
             self.chat_log.write(Text.from_markup(f"⚙️  [bold #daa520]Found existing chat history logs ({len(self.chat_history)//2} messages preserved).[/bold #daa520]"))
         self.chat_log.write("👉 Choose a dropdown menu function above to index data or begin typing below to chat.")
 
+    def exit(self, result = None) -> None:
+        try:
+            playsound(SFX_EXIT, block=True)
+        except Exception:
+            pass
+
+        super().exit(result)
+
     def update_live_progress(self, task_msg: str, completion_percentage: int) -> None:
         """Draws a live progress meter directly into the application layout."""
         bar_width = 20
         filled = int(bar_width * completion_percentage // 100)
         meter = "█" * filled + "░" * (bar_width - filled)
+        self.status.update("")
         self.status.update(f"⚙️  {task_msg} [{meter}] {completion_percentage}%")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -407,7 +459,11 @@ class AIMAssistantApp(App):
             return
 
         self.chat_log.write(Text.from_markup(f"\n[bold #0000ff]You:[/bold #0000ff] {user_text}"))
-        self.status.update("🤖 AI Assistant is typing...")
+        try:
+            playsound(SFX_SEND, block=False)
+        except Exception:
+            pass
+        self.status.update(Text.from_markup("[#222021 on #d9dddc]🤖 AI Assistant is typing...[/]"))
 
         worker = self.run_worker(lambda: query_local_ai(user_text, self.chat_history), thread=True)
 
@@ -415,7 +471,11 @@ class AIMAssistantApp(App):
             reply = await worker.wait()
             self.chat_log.write(Text.from_markup("[bold #ff0000]AI Assistant:[/bold #ff0000]"))
             self.chat_log.write(Markdown(reply))
-            self.status.update("System Status: Online & Idle")
+            try:
+                playsound(SFX_RECV, block=False)
+            except Exception:
+                pass
+            self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
             self.chat_history.append({"role": "user", "content": user_text})
             self.chat_history.append({"role": "assistant", "content": reply})
@@ -464,8 +524,8 @@ class AIMAssistantApp(App):
                 self.chat_log.write(f"\n⚙️  SYSTEM: Commencing manifest file processing at '{path_val}'...")
                 worker = self.run_worker(lambda: run_manifest_ingest(path_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
-                self.chat_log.write(f"SYSTEM: {res}")
-                self.status.update("System Status: Online & Idle")
+                self.chat_log.write(f"⚙️  SYSTEM: {res}")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "scrape_site":
             url_val = await self.push_screen_wait(InputModal("Enter target URL to crawl & extract text values:"))
@@ -473,8 +533,8 @@ class AIMAssistantApp(App):
                 self.chat_log.write(f"\n⚙️  SYSTEM: Connecting to web resource '{url_val}'...")
                 worker = self.run_worker(lambda: run_site_scrape(url_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
-                self.chat_log.write(f"SYSTEM: {res}")
-                self.status.update("System Status: Online & Idle")
+                self.chat_log.write(f"⚙️  SYSTEM: {res}")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "ingest_file":
             file_val = await self.push_screen_wait(InputModal("Enter structural location path to standalone .pdf or .txt file:"))
@@ -482,35 +542,47 @@ class AIMAssistantApp(App):
                 self.chat_log.write(f"\n⚙️  SYSTEM: Attempting context validation for '{file_val}'...")
                 worker = self.run_worker(lambda: run_single_file_ingest(file_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
-                self.chat_log.write(f"SYSTEM: {res}")
-                self.status.update("System Status: Online & Idle")
+                self.chat_log.write(f"⚙️  SYSTEM: {res}")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "wipe_mem":
             confirm = await self.push_screen_wait(InputModal("Type 'WIPEMEM' to delete history files permanently:"))
             if confirm == "WIPEMEM":
+                try:
+                    playsound(SFX_ALT2, block=False)
+                except Exception:
+                    pass
                 if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
                 self.chat_history = []
                 self.chat_log.clear()
                 self.chat_log.write("💥 Cleanup complete! Conversation memory logs reset to zero.")
-                self.status.update("System Status: Online & Idle")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "wipe_db":
             confirm = await self.push_screen_wait(InputModal("Type 'WIPEDB' to delete history files and data vectors permanently:"))
             if confirm == "WIPEDB":
+                try:
+                    playsound(SFX_ALT2, block=False)
+                except Exception:
+                    pass
                 if os.path.exists(DB_DIR): shutil.rmtree(DB_DIR)
                 self.chat_log.clear()
                 self.chat_log.write("💥 Cleanup complete! Vector directories wiped.")
-                self.status.update("System Status: Online & Idle")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "wipe_all":
             confirm = await self.push_screen_wait(InputModal("Type 'WIPEALL' to delete history files and data vectors permanently:"))
             if confirm == "WIPEALL":
+                try:
+                    playsound(SFX_ALT2, block=False)
+                except Exception:
+                    pass
                 if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
                 if os.path.exists(DB_DIR): shutil.rmtree(DB_DIR)
                 self.chat_history = []
                 self.chat_log.clear()
                 self.chat_log.write("💥 Cleanup complete! Conversation memory logs and vector directories reset to zero.")
-                self.status.update("System Status: Online & Idle")
+                self.status.update(Text.from_markup("[#222021 on #d9dddc]System Status: Online & Idle[/]"))
 
         elif choice == "exit":
             self.exit()

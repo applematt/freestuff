@@ -1,11 +1,12 @@
-/Users/apple/Source/aiim/1999-Revision-of-the-Rite-of-Exorcism.pdf
-/Users/apple/Source/aiim/3Textofthediesirae-200521-184652.pdf
-/Users/apple/Source/aiim/4WECSKSalvation3741-200521-184726.pdf
-/Users/apple/Source/aiim/6DostoevskyTheGrandInquisitor-200521-185044.pdf
-/Users/apple/Source/aiim/Creation-as-Temple-Building-and-Work-as-Liturgy-in-Genesis-1-31.pdf
-/Users/apple/Source/aiim/LectioDivinaHandout-200902-143654.pdf
-/Users/apple/Source/aiim/Ratzinger_SpiritofLiturgy_LifeandLiturgy1-200625-085147.pdf
-/Users/apple/Source/aiim/Rite-of-Exorcism.txt
+/Users/apple/Source/aiim/rcia/1999-Revision-of-the-Rite-of-Exorcism.pdf
+/Users/apple/Source/aiim/rcia/3Textofthediesirae-200521-184652.pdf
+/Users/apple/Source/aiim/rcia/4WECSKSalvation3741-200521-184726.pdf
+/Users/apple/Source/aiim/rcia/6DostoevskyTheGrandInquisitor-200521-185044.pdf
+/Users/apple/Source/aiim/rcia/Creation-as-Temple-Building-and-Work-as-Liturgy-in-Genesis-1-31.pdf
+/Users/apple/Source/aiim/rcia/LectioDivinaHandout-200902-143654.pdf
+/Users/apple/Source/aiim/rcia/Ratzinger_SpiritofLiturgy_LifeandLiturgy1-200625-085147.pdf
+/Users/apple/Source/aiim/rcia/Rite-of-Exorcism.txt
+/Users/apple/Source/aiim/rcia/Pope-Francis-Prayer-Catechesis-on-Prayer.pdf
 https://www.vatican.va/roman_curia/congregations/cfaith/documents/rc_con_cfaith_doc_19750626_fede-cristiana-demonologia_en.html
 https://www.scribd.com/document/943801331/Ancient-Exorcism-Rite
 https://www.catholic.com/audio/sp/the-demonic-case-for-catholicism
@@ -15,3 +16,4 @@ https://dioceseoftrenton.org/news/thepurposeandpracticeofexorcismsinthechurch
 https://thomisticinstitute.org/sed-contra-why-the-demons-fell
 https://www.thecatholicthing.org/2016/09/19/aquinas-on-demons/
 https://www.newadvent.org/summa/1109.htm
+https://www.vatican.va/content/francesco/en/audiences/2021/documents/papa-francesco_20210414_udienza-generale.html
