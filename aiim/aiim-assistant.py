@@ -329,22 +329,35 @@ class AIMAssistantApp(App):
         color: #00ff00;
         text-style: bold;
     }
+
+    /* Explicitly strip unnecessary border rules on the dropdown overlay */
+    SelectOverlay {
+        border: none;
+    }
+
+    /* Ensure the underlying container list clears stacked dividers */
+    SelectOverlay > OptionList {
+        border: solid blue;
+        background: white;
+    }
+
+    /* Clear specific sub-widget border focus traps */
+    SelectCurrent, SelectCurrent:focus {
+        border: none;
+    }
     """
 
     BINDINGS = [("escape", "quit", "Exit Messenger")]
 
     def compose(self) -> ComposeResult:
         menu_options = [
-            ("📁 Action Menu ...", "none"),
-            ("---", "none"),
-            ("📋 Ingest Manifest File", "ingest_manifest"),
-            ("🌎 Scrape Public Website", "scrape_site"),
-            ("📄 Ingest Individual File", "ingest_file"),
-            ("---", "none"),
-            ("⏮️  Reset Session Memory", "wipe_mem"),
-            ("‼️  Wipe DB", "wipe_db"),
-            ("---", "none"),
-            ("🚨 Reset Session Memory & Wipe DB", "wipe_all")
+            ("+ Action Menu ...", "none"),
+            ("=> Ingest Manifest File", "ingest_manifest"),
+            ("=> Scrape Public Website", "scrape_site"),
+            ("=> Ingest Individual File", "ingest_file"),
+            ("=> Reset Session Memory", "wipe_mem"),
+            ("=> Wipe DB", "wipe_db"),
+            ("=> Reset Session Memory & Wipe DB", "wipe_all")
         ]
 
         yield Container(
