@@ -194,7 +194,7 @@ def query_local_ai(user_raw, chat_history):
 
     system_instructions = (
         "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n"
-        "Reference documents used to build response.\n"
+        "Cite sources with footnotes when possible.\n"
         f"Answer based on these document facts if relevant:\n{context_str}"
     )
     payload = [{"role": "system", "content": system_instructions}]
