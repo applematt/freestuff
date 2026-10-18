@@ -446,7 +446,7 @@ class AIMAssistantApp(App):
         filled = int(bar_width * completion_percentage // 100)
         meter = "█" * filled + "░" * (bar_width - filled)
         self.status.update("")
-        self.status.update(f"⚙️  {task_msg} [{meter}] {completion_percentage}%")
+        self.status.update(f"🏃 {task_msg} [{meter}] {completion_percentage}%")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         user_text = event.value.strip()
