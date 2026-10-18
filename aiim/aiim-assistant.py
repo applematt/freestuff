@@ -10,6 +10,7 @@ import json
 import asyncio
 import shutil
 import requests
+import time
 from playsound import playsound
 
 # --- CORE PATH CONFIGURATION ---
@@ -53,8 +54,27 @@ def process_and_add_docs(documents, progress_callback):
     progress_callback(f"Vectorizing {total_chunks} blocks locally...", 60)
     embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
 
-    # Commit files to disk database
-    Chroma.from_documents(documents=final_chunks, embedding=embeddings, persist_directory=DB_DIR)
+    # -- Commit files to disk database --
+    # Process in chunks of 5-10 items to prevent Ollama socket flood
+    batch_size = 15
+
+    # Initialize the database with the first batch
+    db = Chroma.from_documents(
+        documents=final_chunks[:batch_size],
+        embedding=embeddings,
+        persist_directory=DB_DIR
+    )
+
+    # Add remaining chunks with a time sleep interval
+    for i in range(batch_size, total_chunks, batch_size):
+        batch = final_chunks[i:i + batch_size]
+        db.add_documents(documents=batch)
+
+        # Adjust progress metric dynamically
+        current_pct = int(60 + (i / total_chunks) * 35)
+        progress_callback(f"Indexing vectors ({i}/{total_chunks})...", current_pct)
+
+        time.sleep(0.5) # Sleep half a second between small batches
 
     progress_callback("Commit complete!", 100)
     try:
@@ -173,6 +193,9 @@ def run_manifest_ingest(manifest_path, progress_callback):
             # Log error quietly to terminal standard error and keep going through the manifest
             print(f"Skipping '{item[:30]}' due to extraction failure: {e}", file=sys.stderr)
 
+        # give Ollama some breathing room between processing requests
+        time.sleep(2)
+
     # Single batch compile step for performance stability
     return process_and_add_docs(all_docs, progress_callback)
 
@@ -187,15 +210,20 @@ def query_local_ai(user_raw, chat_history):
             from langchain_community.vectorstores import Chroma
             from langchain_ollama import OllamaEmbeddings
             vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
-            relevant = vs.as_retriever(search_kwargs={"k": 3}).invoke(user_raw)
+            # Increase k to 4 or 5 for better answer coverage
+            relevant = vs.as_retriever(search_kwargs={"k": 4}).invoke(user_raw)
             context_str = "\n".join([d.page_content for d in relevant])
         except:
             pass
 
     system_instructions = (
         "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n"
-        "Cite sources with footnotes when possible.\n"
-        f"Answer based on these document facts if relevant:\n{context_str}"
+        "INSTRUCTIONS FOR ANSWERING:\n"
+        "1. Answer the user's question using ONLY the provided Document Facts below.\n"
+        "2. For EVERY claim or fact you mention, you MUST append a numbered footnote anchor matching the document source index, like this: [1] or [2].\n"
+        "3. Do not invent facts. If the information is not in the text, say you do not know.\n"
+        "4. At the very bottom of your response, create a 'Sources:' section matching the numbers to their file paths or URLs.\n\n"
+        f"Document Facts:\n{context_str}"
     )
     payload = [{"role": "system", "content": system_instructions}]
     payload.extend(chat_history[-10:])
@@ -400,7 +428,7 @@ class AIMAssistantApp(App):
 
         yield Container(
             Horizontal(
-                Label(" 💾  AI IM (AIM) CLIENT v1.1 ", id="menu_lbl"),
+                Label(" 💾  AI IM (AIIM) CLIENT v1.1 ", id="menu_lbl"),
                 Select(menu_options, value="none", id="action_menu", allow_blank=False),
                 id="top_bar"
             ),
@@ -427,7 +455,7 @@ class AIMAssistantApp(App):
                     self.chat_history = json.load(f)
             except: pass
 
-        self.chat_log.write(Text.from_markup("🔒 [bold #0b6623]System:[/bold #0b6623] AIM Secure Local Connection Established."))
+        self.chat_log.write(Text.from_markup("🔒 [bold #0b6623]SYSTEM:[/bold #0b6623] Secure Local Connection Established."))
         if self.chat_history:
             self.chat_log.write(Text.from_markup(f"⚙️  [bold #daa520]Found existing chat history logs ({len(self.chat_history)//2} messages preserved).[/bold #daa520]"))
         self.chat_log.write("👉 Choose a dropdown menu function above to index data or begin typing below to chat.")
@@ -446,7 +474,7 @@ class AIMAssistantApp(App):
         filled = int(bar_width * completion_percentage // 100)
         meter = "█" * filled + "░" * (bar_width - filled)
         self.status.update("")
-        self.status.update(f"🏃 {task_msg} [{meter}] {completion_percentage}%")
+        self.status.update(Text.from_markup(f"[#222021 on #d9dddc]🏃 {task_msg} [{meter}] {completion_percentage}%[/]"))
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         user_text = event.value.strip()
