@@ -173,6 +173,8 @@ def query_local_ai(user_raw, chat_history):
 
 	return full_reply
 
+from rich.text import Text
+from rich.markdown import Markdown
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Grid
 from textual.screen import ModalScreen
@@ -298,16 +300,28 @@ class AIMAssistantApp(App):
         width: 45;
     }
     #chat_log {
-        background: black;
-        color: white;
-        border: solid white;
+        background: white;
+        color: black;
+        border: solid blue;
         height: 1fr;
         margin-bottom: 1;
+
+        /* The idle background track and handle color */
+        scrollbar-background: #363636;
+        scrollbar-color: #808080;
+
+        /* The background track color when hovered or clicked */
+        scrollbar-background-hover: #808080;
+        scrollbar-background-active: #363636;
+
+        /* The moving thumb handle color when hovered or clicked */
+        scrollbar-color-hover: #ffffff;
+        scrollbar-color-active: #808080;
     }
     #input_box {
-        background: black;
-        color: white;
-        border: solid cyan;
+        background: white;
+        color: black;
+        border: solid blue;
         height: 3;
     }
     #status_row {
@@ -335,7 +349,7 @@ class AIMAssistantApp(App):
 
         yield Container(
             Horizontal(
-                Label(" AI IM (AIM) CLIENT v1.1 ", id="menu_lbl"),
+                Label(" 💾  AI IM (AIM) CLIENT v1.1 ", id="menu_lbl"),
                 Select(menu_options, value="none", id="action_menu", allow_blank=False),
                 id="top_bar"
             ),
@@ -357,9 +371,9 @@ class AIMAssistantApp(App):
                     self.chat_history = json.load(f)
             except: pass
 
-        self.chat_log.write("🤖 System: AIM Secure Local Connection Established.")
+        self.chat_log.write(Text.from_markup("🔒 [bold #0b6623]System:[/bold #0b6623] AIM Secure Local Connection Established."))
         if self.chat_history:
-            self.chat_log.write(f"⚙️ Found existing chat history logs ({len(self.chat_history)//2} messages preserved).")
+            self.chat_log.write(Text.from_markup(f"⚙️  [bold #daa520]Found existing chat history logs ({len(self.chat_history)//2} messages preserved).[/bold #daa520]"))
         self.chat_log.write("👉 Choose a dropdown menu function above to index data or begin typing below to chat.")
 
     def update_live_progress(self, task_msg: str, completion_percentage: int) -> None:
@@ -379,14 +393,15 @@ class AIMAssistantApp(App):
             self.exit()
             return
 
-        self.chat_log.write(f"\nYou: {user_text}")
+        self.chat_log.write(Text.from_markup(f"\n[bold #0000ff]You:[/bold #0000ff] {user_text}"))
         self.status.update("🤖 AI Assistant is typing...")
 
         worker = self.run_worker(lambda: query_local_ai(user_text, self.chat_history), thread=True)
 
         async def handle_response():
             reply = await worker.wait()
-            self.chat_log.write(f"AI Assistant: {reply}")
+            self.chat_log.write(Text.from_markup("[bold #ff0000]AI Assistant:[/bold #ff0000]"))
+            self.chat_log.write(Markdown(reply))
             self.status.update("System Status: Online & Idle")
 
             self.chat_history.append({"role": "user", "content": user_text})
@@ -433,7 +448,7 @@ class AIMAssistantApp(App):
         if choice == "ingest_manifest":
             path_val = await self.push_screen_wait(InputModal("Enter absolute path to the manifest file (.txt):"))
             if path_val:
-                self.chat_log.write(f"\n⚙️ SYSTEM: Commencing manifest file processing at '{path_val}'...")
+                self.chat_log.write(f"\n⚙️  SYSTEM: Commencing manifest file processing at '{path_val}'...")
                 worker = self.run_worker(lambda: run_manifest_ingest(path_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
                 self.chat_log.write(f"SYSTEM: {res}")
@@ -442,7 +457,7 @@ class AIMAssistantApp(App):
         elif choice == "scrape_site":
             url_val = await self.push_screen_wait(InputModal("Enter target URL to crawl & extract text values:"))
             if url_val:
-                self.chat_log.write(f"\n⚙️ SYSTEM: Connecting to web resource '{url_val}'...")
+                self.chat_log.write(f"\n⚙️  SYSTEM: Connecting to web resource '{url_val}'...")
                 worker = self.run_worker(lambda: run_site_scrape(url_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
                 self.chat_log.write(f"SYSTEM: {res}")
@@ -451,7 +466,7 @@ class AIMAssistantApp(App):
         elif choice == "ingest_file":
             file_val = await self.push_screen_wait(InputModal("Enter structural location path to standalone .pdf or .txt file:"))
             if file_val:
-                self.chat_log.write(f"\n⚙️ SYSTEM: Attempting context validation for '{file_val}'...")
+                self.chat_log.write(f"\n⚙️  SYSTEM: Attempting context validation for '{file_val}'...")
                 worker = self.run_worker(lambda: run_single_file_ingest(file_val, self.update_live_progress), thread=True)
                 res = await worker.wait()
                 self.chat_log.write(f"SYSTEM: {res}")
