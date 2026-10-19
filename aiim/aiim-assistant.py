@@ -218,7 +218,13 @@ def query_local_ai(user_raw, chat_history):
             vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
 
             # Increase k to 4 or 5 for better answer coverage
-            relevant = vs.as_retriever(search_kwargs={"k": 5}).invoke(user_raw)
+            #relevant = vs.as_retriever(search_kwargs={"k": 3}).invoke(user_raw)
+
+            # Use Similarity Score Thresholding
+            relevant = vs.as_retriever(
+                search_type="similarity_score_threshold",
+                search_kwargs={"score_threshold": 0.85, "k": 20}
+            ).invoke(user_raw)
 
             # Formats context blocks uniquely numbered with their true source attached
             context_blocks = []
