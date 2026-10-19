@@ -223,7 +223,7 @@ def query_local_ai(user_raw, chat_history):
             # Use Similarity Score Thresholding
             relevant = vs.as_retriever(
                 search_type="similarity_score_threshold",
-                search_kwargs={"score_threshold": 0.85, "k": 20}
+                search_kwargs={"score_threshold": 0.7, "k": 10}
             ).invoke(user_raw)
 
             # Formats context blocks uniquely numbered with their true source attached
@@ -240,24 +240,19 @@ def query_local_ai(user_raw, chat_history):
     system_instructions = (
         "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n\n"
         "CONTEXT OBJECTIVE:\n"
-        "Answer the user's question using ONLY the provided Document Facts text blocks below. "
-        "Each block is clearly labeled with an index number like '[1]', '[2]' and a 'Source' identifier.\n\n"
+        "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
+        "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
+        "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
         "STRICT CITATION RULES:\n"
         "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
-        "as a inline footnote anchor immediately following the sentence. Use the format, [2], etc. "
-        "Example: 'The project deadline was moved to Friday [1].'\n"
-        "2. Do not group multiple sentences under a single citation at the end of a paragraph. "
-        "Cite line-by-line if multiple sources are used.\n"
-        "3. Do not invent or extrapolate facts. If the answer cannot be found in the provided facts, "
-        "state: 'I do not have enough information in the provided database to answer this.'\n\n"
+        "as an inline footnote anchor immediately following the sentence. Use the format, [1], [2], etc.\n"
+        "2. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
+        "3. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
+        "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
         "FOOTNOTE FORMATTING RULES:\n"
-        "At the very bottom of your response, add a blank line followed by a horizontal divider line (`---`). "
-        "Underneath, create a 'Sources:' header and list each cited source index mapped back to its file path or URL name. "
-        "Use this exact layout:\n"
+        "At the very bottom of your response, add a blank line followed by a horizontal divider line (`---`).\n"
         "Sources:\n"
-        "[1] filename.txt\n"
-        "[2] filename.pdf\n"
-        "[3] https://www.some-url.com/article?p=3\n\n"
+        "[1] filename.txt\n\n"
         f"Document Facts:\n{context_str}"
     )
 
@@ -267,7 +262,16 @@ def query_local_ai(user_raw, chat_history):
 
     full_reply = ""
     try:
-        stream = ollama.chat(model=LLM_MODEL, messages=payload, stream=True)
+        stream = ollama.chat(
+            model=LLM_MODEL,
+            messages=payload,
+            stream=True,
+            options={
+                "num_predict": 1024,
+                "temperature": 0.5,
+                "top_p": 0.9
+            }
+        )
         for chunk in stream:
             full_reply += chunk['message']['content']
     except Exception as e:
