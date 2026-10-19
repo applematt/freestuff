@@ -218,7 +218,7 @@ def query_local_ai(user_raw, chat_history):
             vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
 
             # Increase k to 4 or 5 for better answer coverage
-            relevant = vs.as_retriever(search_kwargs={"k": 4}).invoke(user_raw)
+            relevant = vs.as_retriever(search_kwargs={"k": 5}).invoke(user_raw)
 
             # Formats context blocks uniquely numbered with their true source attached
             context_blocks = []
@@ -232,14 +232,29 @@ def query_local_ai(user_raw, chat_history):
             pass
 
     system_instructions = (
-        "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n"
-        "INSTRUCTIONS FOR ANSWERING:\n"
-        "1. Answer the user's question using ONLY the provided Document Facts below.\n"
-        "2. For EVERY claim or fact you mention, you MUST append a numbered footnote anchor matching the document source index, like this: [1] or [2].\n"
-        "3. Do not invent facts. If the information is not in the text, say you do not know.\n"
-        "4. At the very bottom of your response, create a 'Sources:' section matching the numbers to their file paths or URLs.\n\n"
+        "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n\n"
+        "CONTEXT OBJECTIVE:\n"
+        "Answer the user's question using ONLY the provided Document Facts text blocks below. "
+        "Each block is clearly labeled with an index number like '[1]', '[2]' and a 'Source' identifier.\n\n"
+        "STRICT CITATION RULES:\n"
+        "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
+        "as a inline footnote anchor immediately following the sentence. Use the format, [2], etc. "
+        "Example: 'The project deadline was moved to Friday [1].'\n"
+        "2. Do not group multiple sentences under a single citation at the end of a paragraph. "
+        "Cite line-by-line if multiple sources are used.\n"
+        "3. Do not invent or extrapolate facts. If the answer cannot be found in the provided facts, "
+        "state: 'I do not have enough information in the provided database to answer this.'\n\n"
+        "FOOTNOTE FORMATTING RULES:\n"
+        "At the very bottom of your response, add a blank line followed by a horizontal divider line (`---`). "
+        "Underneath, create a 'Sources:' header and list each cited source index mapped back to its file path or URL name. "
+        "Use this exact layout:\n"
+        "Sources:\n"
+        "[1] filename.txt\n"
+        "[2] filename.pdf\n"
+        "[3] https://www.some-url.com/article?p=3\n\n"
         f"Document Facts:\n{context_str}"
     )
+
     payload = [{"role": "system", "content": system_instructions}]
     payload.extend(chat_history[-10:])
     payload.append({"role": "user", "content": user_raw})
