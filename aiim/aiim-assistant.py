@@ -110,12 +110,18 @@ def extract_file_content(file_path):
     if not os.path.isfile(expanded):
         raise FileNotFoundError(f"File not found: {expanded}")
 
+    # Use os.path.basename(expanded) if you only want the file name instead of full path
     if expanded.endswith('.pdf'):
-        return PyPDFLoader(expanded).load()
+        docs = PyPDFLoader(expanded).load()
     elif expanded.endswith('.txt'):
-        return TextLoader(expanded).load()
+        docs = TextLoader(expanded).load()
     else:
         raise ValueError("Unsupported file format. Please choose a .pdf or .txt file.")
+
+    # Standardize source metadata to just the filename (optional)
+    for doc in docs:
+        doc.metadata["source"] = os.path.basename(expanded)
+    return docs
 
 
 # --- MAIN INGESTION ENTRYPOINTS ---
@@ -210,9 +216,18 @@ def query_local_ai(user_raw, chat_history):
             from langchain_community.vectorstores import Chroma
             from langchain_ollama import OllamaEmbeddings
             vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
+
             # Increase k to 4 or 5 for better answer coverage
             relevant = vs.as_retriever(search_kwargs={"k": 4}).invoke(user_raw)
-            context_str = "\n".join([d.page_content for d in relevant])
+
+            # Formats context blocks uniquely numbered with their true source attached
+            context_blocks = []
+            for idx, doc in enumerate(relevant, start=1):
+                source_name = doc.metadata.get("source", "Unknown Source")
+                block_text = f"--- Document [{idx}] (Source: {source_name}) ---\n{doc.page_content}\n"
+                context_blocks.append(block_text)
+
+            context_str = "\n".join(context_blocks)
         except:
             pass
 
