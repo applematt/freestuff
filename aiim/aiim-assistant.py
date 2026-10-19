@@ -217,48 +217,105 @@ def query_local_ai(user_raw, chat_history):
             from langchain_ollama import OllamaEmbeddings
             vs = Chroma(persist_directory=DB_DIR, embedding_function=OllamaEmbeddings(model=EMBEDDING_MODEL))
 
-            # Increase k to 4 or 5 for better answer coverage
-            #relevant = vs.as_retriever(search_kwargs={"k": 3}).invoke(user_raw)
-
             # Use Similarity Score Thresholding
             relevant = vs.as_retriever(
                 search_type="similarity_score_threshold",
                 search_kwargs={"score_threshold": 0.7, "k": 10}
             ).invoke(user_raw)
 
-            # Formats context blocks uniquely numbered with their true source attached
+            # Map unique filenames to sequential indices to prevent duplicates
             context_blocks = []
-            for idx, doc in enumerate(relevant, start=1):
+            unique_sources = {}
+            source_counter = 1
+
+            for doc in relevant:
                 source_name = doc.metadata.get("source", "Unknown Source")
-                block_text = f"--- Document [{idx}] (Source: {source_name}) ---\n{doc.page_content}\n"
+
+                # If this file hasn't been seen yet in this turn, assign it the next number
+                if source_name not in unique_sources:
+                    unique_sources[source_name] = source_counter
+                    source_counter += 1
+
+                current_idx = unique_sources[source_name]
+                block_text = f"--- Document [{current_idx}] (Source: {source_name}) ---\n{doc.page_content}\n"
                 context_blocks.append(block_text)
 
             context_str = "\n".join(context_blocks)
+
+            # Dynamically build a clean Python-generated source footer map
+            if unique_sources:
+                footer_lines = [f"[{idx}] {src}" for src, idx in unique_sources.items()]
+                source_footer_str = "\n---\nSources:\n" + "\n".join(footer_lines)
+            else:
+                source_footer_str = ""
         except:
-            pass
+            source_footer_str = ""
+
+#    system_instructions = (
+#        "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
+#
+#        "CONTEXT OBJECTIVE:\n"
+#        "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
+#        "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
+#        "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
+#
+#        "STRICT CITATION RULES:\n"
+#        "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
+#        "as an inline footnote anchor immediately following the sentence. Use the format, [2], etc.\n"
+#        "2. ONLY cite a source if you explicitly used information from that specific text block.\n"
+#        "3. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
+#        "4. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
+#        "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
+#
+#        "MANDATORY MARKDOWN FORMATTING RULES:\n"
+#        "You MUST format your entire response using clean, valid Markdown. Follow these strict styling choices:\n"
+#        "- Use proper bold headers (### Header) instead of raw text headers.\n"
+#        "- Use clear bulleted lists (`* Item`) or numbered lists (`1. Item`) for sequential steps.\n"
+#        "- Put code blocks, commands, or technical paths inside syntax-highlighted code fences (e.g., ```python ... ```).\n"
+#        "- Ensure there is a blank line before and after every list, header, and code block to prevent parsing errors.\n\n"
+#
+#        f"Document Facts:\n{context_str}"
+#    )
 
     system_instructions = (
-        "You are an offline custom AI assistant running inside a blue AIM messenger app window.\n\n"
-        "CONTEXT OBJECTIVE:\n"
-        "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
-        "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
-        "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
-        "STRICT CITATION RULES:\n"
-        "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
-        "as an inline footnote anchor immediately following the sentence. Use the format, [1], [2], etc.\n"
-        "2. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
-        "3. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
-        "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
-        "FOOTNOTE FORMATTING RULES:\n"
-        "At the very bottom of your response, add a blank line followed by a horizontal divider line (`---`).\n"
-        "Sources:\n"
-        "[1] filename.txt\n\n"
-        f"Document Facts:\n{context_str}"
+    "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
+
+    "CONTEXT OBJECTIVE:\n"
+    "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
+    "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
+    "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
+
+    "STRICT CITATION RULES:\n"
+    "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
+    "as an inline footnote anchor immediately following the sentence. You MUST use the exact bracketed format, such as [1] or [2].\n"
+    "2. The inline citation index [X] must exactly match the index specified in the '--- Document [X] ---' header of the text block you used.\n"
+    "3. ONLY cite a source if you explicitly used information from that specific text block.\n"
+    "4. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
+    "5. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
+    "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
+
+    "MANDATORY MARKDOWN FORMATTING RULES:\n"
+    "You MUST format your entire response using clean, valid Markdown. Follow these strict styling choices:\n"
+    "- Use proper bold headers (### Header) instead of raw text headers.\n"
+    "- Use clear bulleted lists (`* Item`) or numbered lists (`1. Item`) for sequential steps.\n"
+    "- Put code blocks, commands, or technical paths inside syntax-highlighted code fences (e.g., ```python ... ```).\n"
+    "- Ensure there is a blank line before and after every list, header, and code block to prevent parsing errors.\n"
+    "- DO NOT write or generate a 'Sources:' list or a horizontal divider (`---`) at the bottom of your response. Python handles this automatically.\n"
     )
 
     payload = [{"role": "system", "content": system_instructions}]
     payload.extend(chat_history[-10:])
-    payload.append({"role": "user", "content": user_raw})
+
+    # Construct a fresh, contextualized user package for this specific turn
+    user_payload_content = (
+        f"User Question: {user_raw}\n\n"
+        f"--- CURRENT DATABASE SEARCH RESULT CONTEXT ---\n"
+        f"Document Facts: {context_str}\n\n"
+        f"--- APPLICABLE SOURCES FOR THIS TURN ---\n"
+        f"{source_footer_str}"
+    )
+
+    payload.append({"role": "user", "content": user_payload_content})
 
     full_reply = ""
     try:
@@ -276,6 +333,13 @@ def query_local_ai(user_raw, chat_history):
             full_reply += chunk['message']['content']
     except Exception as e:
         full_reply = f"[Ollama Connection Error: {e}]"
+
+    # If the AI successfully replied and we have sources, stitch them together perfectly
+    if full_reply and source_footer_str and "[Ollama Connection Error" not in full_reply:
+        if "Sources: None" in source_footer_str:
+            return f"{full_reply.strip()}\n"
+        else:
+            return f"{full_reply.strip()}\n\n{source_footer_str}"
 
     return full_reply
 
