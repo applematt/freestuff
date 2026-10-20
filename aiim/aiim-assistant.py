@@ -210,6 +210,8 @@ def query_local_ai(user_raw, chat_history):
     """Performs an offline RAG factual text query matching current context loops."""
     import ollama
     context_str = ""
+    source_footer_str = ""
+    has_context = False
 
     if os.path.exists(DB_DIR):
         try:
@@ -220,7 +222,7 @@ def query_local_ai(user_raw, chat_history):
             # Use Similarity Score Thresholding
             relevant = vs.as_retriever(
                 search_type="similarity_score_threshold",
-                search_kwargs={"score_threshold": 0.7, "k": 10}
+                search_kwargs={"score_threshold": 0.7, "k": 12}
             ).invoke(user_raw)
 
             # Map unique filenames to sequential indices to prevent duplicates
@@ -237,83 +239,62 @@ def query_local_ai(user_raw, chat_history):
                     source_counter += 1
 
                 current_idx = unique_sources[source_name]
-                block_text = f"--- Document [{current_idx}] (Source: {source_name}) ---\n{doc.page_content}\n"
+                # Make the context block boundaries completely unambiguous for the LLM parsing pass
+                block_text = f'<source id="{current_idx}">\nSource Identifier: {source_name}\nDocument Excerpt:\n{doc.page_content}\n</source>\n'
                 context_blocks.append(block_text)
 
-            context_str = "\n".join(context_blocks)
+            if context_blocks:
+                context_str = "\n".join(context_blocks)
+                has_context = True
 
             # Dynamically build a clean Python-generated source footer map
             if unique_sources:
                 footer_lines = [f"[{idx}] {src}" for src, idx in unique_sources.items()]
-                source_footer_str = "\n---\nSources:\n" + "\n".join(footer_lines)
-            else:
-                source_footer_str = ""
-        except:
+                source_footer_str = "\n\n**Sources:**\n" + "\n".join(footer_lines)
+        except Exception as e:
+            # Prevent silent failures from breaking the downstream loop
+            context_str = f"<!-- Database context read issue: {str(e)} -->"
             source_footer_str = ""
 
-#    system_instructions = (
-#        "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
-#
-#        "CONTEXT OBJECTIVE:\n"
-#        "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
-#        "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
-#        "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
-#
-#        "STRICT CITATION RULES:\n"
-#        "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
-#        "as an inline footnote anchor immediately following the sentence. Use the format, [2], etc.\n"
-#        "2. ONLY cite a source if you explicitly used information from that specific text block.\n"
-#        "3. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
-#        "4. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
-#        "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
-#
-#        "MANDATORY MARKDOWN FORMATTING RULES:\n"
-#        "You MUST format your entire response using clean, valid Markdown. Follow these strict styling choices:\n"
-#        "- Use proper bold headers (### Header) instead of raw text headers.\n"
-#        "- Use clear bulleted lists (`* Item`) or numbered lists (`1. Item`) for sequential steps.\n"
-#        "- Put code blocks, commands, or technical paths inside syntax-highlighted code fences (e.g., ```python ... ```).\n"
-#        "- Ensure there is a blank line before and after every list, header, and code block to prevent parsing errors.\n\n"
-#
-#        f"Document Facts:\n{context_str}"
-#    )
+    if has_context:
+        system_instructions = (
+            "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
 
-    system_instructions = (
-    "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
+            "CONTEXT OBJECTIVE:\n"
+            "Answer the user's question by thoroughly evaluating the provided facts within the structural <source id=\"X\"> tags. "
+            "Provide your response in a natural, fluid, and conversational manner. "
+            "Write well-structured, cohesive narrative paragraphs that naturally connect ideas and explain the 'why' behind the facts.\n\n"
 
-    "CONTEXT OBJECTIVE:\n"
-    "Answer the user's question by thoroughly evaluating the provided Document Facts text blocks below. "
-    "Provide comprehensive, long, detailed, and analytical responses. Break down complex steps, "
-    "explain the 'why' behind the facts, and structure your explanation using Markdown.\n\n"
+            "STRICT CITATION RULES:\n"
+            "1. Every single factual statement, claim, or deduction you make MUST be immediately followed by its source citation bracket.\n"
+            "2. You MUST use the exact format [X] where X is the precise integer from the id attribute of the matching <source id=\"X\"> tag.\n"
+            "3. If a sentence relies on information from multiple sources, append them individually (e.g., 'The system updates dynamically [1][2].').\n"
+            "4. NEVER invent a citation number that is not explicitly present in the provided context source blocks.\n"
+            "5. Do not output, repeat, or echo the structural '<source>' or '</source>' tags anywhere in your final conversation text.\n"
+            "6. If the provided context blocks do not contain the answer, say: 'I do not have enough information in the provided database.'\n\n"
 
-    "STRICT CITATION RULES:\n"
-    "1. For EVERY factual claim, quote, or inference you make, you MUST append the matching index number "
-    "as an inline footnote anchor immediately following the sentence. You MUST use the exact bracketed format, such as [1] or [2].\n"
-    "2. The inline citation index [X] must exactly match the index specified in the '--- Document [X] ---' header of the text block you used.\n"
-    "3. ONLY cite a source if you explicitly used information from that specific text block.\n"
-    "4. Do not combine sentences under a single citation. Cite line-by-line if multiple sources are used.\n"
-    "5. Do not invent facts completely detached from the text. If the answer absolutely cannot be inferred "
-    "from the provided facts, state: 'I do not have enough information in the provided database.'\n\n"
-
-    "MANDATORY MARKDOWN FORMATTING RULES:\n"
-    "You MUST format your entire response using clean, valid Markdown. Follow these strict styling choices:\n"
-    "- Use proper bold headers (### Header) instead of raw text headers.\n"
-    "- Use clear bulleted lists (`* Item`) or numbered lists (`1. Item`) for sequential steps.\n"
-    "- Put code blocks, commands, or technical paths inside syntax-highlighted code fences (e.g., ```python ... ```).\n"
-    "- Ensure there is a blank line before and after every list, header, and code block to prevent parsing errors.\n"
-    "- DO NOT write or generate a 'Sources:' list or a horizontal divider (`---`) at the bottom of your response. Python handles this automatically.\n"
-    )
+            "MANDATORY FORMATTING Rules:\n"
+            "- Do not generate any 'Sources:' index or horizontal dividers at the bottom of your text response under any circumstances.\n\n"
+        )
+    else:
+        system_instructions = (
+            "You are an offline custom AI assistant running inside a blue retro instant messenger app window.\n\n"
+            "OBJECTIVE:\n"
+            "Chat with the user normally, fluidly, and conversationally. "
+            "There are no document sources available for this specific query, so DO NOT use any citation brackets, footnotes, or numbers (e.g., DO NOT write [1] or [2]) under any circumstances."
+        )
 
     payload = [{"role": "system", "content": system_instructions}]
     payload.extend(chat_history[-10:])
 
     # Construct a fresh, contextualized user package for this specific turn
-    user_payload_content = (
-        f"User Question: {user_raw}\n\n"
-        f"--- CURRENT DATABASE SEARCH RESULT CONTEXT ---\n"
-        f"Document Facts: {context_str}\n\n"
-        f"--- APPLICABLE SOURCES FOR THIS TURN ---\n"
-        f"{source_footer_str}"
-    )
+    if has_context:
+        user_payload_content = (
+            f"User Question: {user_raw}\n\n"
+            f"Available Context Source Blocks:\n{context_str}\n"
+        )
+    else:
+        user_payload_content = f"User Question: {user_raw}"
 
     payload.append({"role": "user", "content": user_payload_content})
 
@@ -325,7 +306,7 @@ def query_local_ai(user_raw, chat_history):
             stream=True,
             options={
                 "num_predict": 1024,
-                "temperature": 0.5,
+                "temperature": 0.2,
                 "top_p": 0.9
             }
         )
@@ -335,11 +316,10 @@ def query_local_ai(user_raw, chat_history):
         full_reply = f"[Ollama Connection Error: {e}]"
 
     # If the AI successfully replied and we have sources, stitch them together perfectly
-    if full_reply and source_footer_str and "[Ollama Connection Error" not in full_reply:
-        if "Sources: None" in source_footer_str:
-            return f"{full_reply.strip()}\n"
-        else:
-            return f"{full_reply.strip()}\n\n{source_footer_str}"
+    if full_reply and "[Ollama Connection Error" not in full_reply:
+        if source_footer_str:
+            return f"{full_reply.strip()}{source_footer_str}"
+        return full_reply.strip()
 
     return full_reply
 
