@@ -222,7 +222,7 @@ def query_local_ai(user_raw, chat_history):
             # Use Similarity Score Thresholding
             relevant = vs.as_retriever(
                 search_type="similarity_score_threshold",
-                search_kwargs={"score_threshold": 0.7, "k": 12}
+                search_kwargs={"score_threshold": 0.6, "k": 5}
             ).invoke(user_raw)
 
             # Map unique filenames to sequential indices to prevent duplicates
@@ -269,8 +269,9 @@ def query_local_ai(user_raw, chat_history):
         "2. You MUST use the exact format [X] where X is the precise integer from the id attribute of the matching <source id=\"X\"> tag.\n"
         "3. If a sentence relies on information from multiple sources, append them individually (e.g., 'The system updates dynamically [1][2].').\n"
         "4. NEVER invent a citation number that is not explicitly present in the provided context source blocks.\n"
-        "5. Do not output, repeat, or echo the structural '<source>' or '</source>' tags anywhere in your final conversation text.\n"
-        "6. If the provided context blocks do not contain the answer, say: 'I do not have enough information in the provided database.'\n\n"
+        "5. IF citations are used, double-check them for accuracy.\n"
+        "6. Do not output, repeat, or echo the structural '<source>' or '</source>' tags anywhere in your final conversation text.\n"
+        "7. If the provided context blocks do not contain the answer, say: 'I do not have enough information in the provided database.'\n\n"
 
         "MANDATORY FORMATTING Rules:\n"
         "- Do not generate any 'Sources:' index or horizontal dividers at the bottom of your text response under any circumstances.\n\n"
@@ -297,8 +298,8 @@ def query_local_ai(user_raw, chat_history):
             messages=payload,
             stream=True,
             options={
-                "num_predict": 1024,
-                "temperature": 0.2,
+                "num_predict": 4096,
+                "temperature": 0.5,
                 "top_p": 0.9
             }
         )

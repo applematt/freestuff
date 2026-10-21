@@ -19,4 +19,5 @@
 /Users/apple/Source/aiim/rcia/The-Ignatius-Bible-Revelation.pdf
 /Users/apple/Source/aiim/rcia/The-Ignatius-Bible-Romans.pdf
 /Users/apple/Source/aiim/rcia/St.-Thomas-Aquinas-Summa-Theologica.pdf
+/Users/apple/Source/aiim/rcia/Catechism-of-the-Catholic-Church.pdf
 
