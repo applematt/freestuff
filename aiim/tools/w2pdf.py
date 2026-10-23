@@ -95,6 +95,9 @@ def clean_and_extract_text(html_content):
 		if re.match(r'^[/\-\s]*[A-Z]{2}[/\-\s]*$', text_content):
 			element.decompose()
 			continue
+		if re.match(r'^[A-Z]{2}_[A-Z]{2}$', text_content):
+			element.decompose()
+			continue
 
 	# Get raw extracted text block
 	text = soup.get_text(separator="\n")
